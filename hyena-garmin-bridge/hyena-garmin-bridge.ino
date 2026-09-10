@@ -13,6 +13,11 @@
 #include "GarminCSC.h"
 #include "GarminCPS.h"
 
+// Temporary test value for validating cadence timing with Garmin.
+// Replace this with telemetry.cadenceRpm once the Hyena BLE client is
+// implemented.
+const float TEST_CADENCE_RPM = 90.0f;
+
 HyenaBike bike;
 GarminCSC csc;
 GarminCPS cps;
@@ -34,7 +39,9 @@ void loop() {
 
   const BikeTelemetry &telemetry = bike.telemetry();
 
-  csc.update(telemetry.speedKph, telemetry.cadenceRpm);
+  // Temporary simulated cadence: Garmin should report approximately
+  // 90 RPM. This will be replaced by telemetry.cadenceRpm later.
+  csc.update(telemetry.speedKph, TEST_CADENCE_RPM);
 
   if (telemetry.powerValid) {
     cps.update(telemetry.powerWatts);

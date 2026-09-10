@@ -39,41 +39,60 @@ void GarminCSC::begin() {
   advertising->start();
 
   Serial.println("Advertising as ESP32 Cadence");
-  _lastEventTime = millis();
+  _lastCrankEventMs = millis();
 }
 
 void GarminCSC::update(float speedKph, float cadenceRpm) {
   (void)speedKph;
 
-  // The original POC generated one crank revolution per second, which
-  // Garmin interpreted as 60 RPM. Preserve that behaviour as the known
-  // good baseline until Hyena telemetry is connected.
-  if (millis() - _lastEventTime >= 1000) {
-    _lastEventTime += 1000;
-    _lastCrankRevolutions++;
-
-    // CSC event time uses 1/1024 second units.
-    uint16_t eventTime = static_cast<uint16_t>(_lastEventTime * 1024UL / 1000UL);
-
-    uint8_t packet[5];
-    packet[0] = 0x02;  // Crank revolution data present
-
-    packet[1] = _lastCrankRevolutions & 0xFF;
-    packet[2] = (_lastCrankRevolutions >> 8) & 0xFF;
-
-    packet[3] = eventTime & 0xFF;
-    packet[4] = (eventTime >> 8) & 0xFF;
-
-    if (cscMeasurement != nullptr) {
-      cscMeasurement->setValue(packet, sizeof(packet));
-      cscMeasurement->notify();
-    }
-
-    Serial.printf(
-        "Crank: %u revs, event time: %u, cadence: %.1f RPM\n",
-        _lastCrankRevolutions,
-        eventTime,
-        cadenceRpm
-    );
+  // No cadence means no crank events. Reset the timing reference so that
+  // a stopped bike does not generate a burst of stale events when cadence
+  // resumes.
+  if (cadenceRpm <= 0.0f) {
+    _lastCrankEventMs = millis();
+    return;
   }
+
+  // CSC cadence is represented by the interval between crank revolution
+  // events. For example, 60 RPM = 1000 ms/rev and 90 RPM = 667 ms/rev.
+  uint32_t intervalMs = static_cast<uint32_t>(60000.0f / cadenceRpm + 0.5f);
+  if (intervalMs == 0) {
+    intervalMs = 1;
+  }
+
+  const uint32_t now = millis();
+  const uint32_t elapsedMs = now - _lastCrankEventMs;
+
+  if (elapsedMs < intervalMs) {
+    return;
+  }
+
+  // Record the actual event time in the CSC 1/1024-second timebase.
+  // UINT16 wraps naturally, as required by the CSC specification.
+  _lastCrankEventMs = now;
+  _lastCrankRevolutions++;
+  _crankEventTime += static_cast<uint16_t>((elapsedMs * 1024UL) / 1000UL);
+
+  uint8_t packet[5];
+  packet[0] = 0x02;  // Crank revolution data present
+
+  // Cumulative crank revolutions (UINT16, little endian)
+  packet[1] = _lastCrankRevolutions & 0xFF;
+  packet[2] = (_lastCrankRevolutions >> 8) & 0xFF;
+
+  // Last crank event time (UINT16, 1/1024 s, little endian)
+  packet[3] = _crankEventTime & 0xFF;
+  packet[4] = (_crankEventTime >> 8) & 0xFF;
+
+  if (cscMeasurement != nullptr) {
+    cscMeasurement->setValue(packet, sizeof(packet));
+    cscMeasurement->notify();
+  }
+
+  Serial.printf(
+      "Crank: %u revs, event time: %u, cadence: %.1f RPM\n",
+      _lastCrankRevolutions,
+      _crankEventTime,
+      cadenceRpm
+  );
 }
