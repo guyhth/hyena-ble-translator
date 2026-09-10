@@ -1,0 +1,20 @@
+# Arduino / build output
+*.hex
+*.elf
+*.bin
+*.map
+*.eep
+
+build/
+.build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Arduino temporary dependency files
+*.ino.d
