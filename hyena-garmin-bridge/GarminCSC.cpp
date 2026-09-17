@@ -6,90 +6,46 @@
 #define CSC_MEASUREMENT_UUID   "2A5B"
 #define CSC_FEATURE_UUID       "2A5C"
 
-static NimBLECharacteristic *cadenceMeasurement = nullptr;
-static NimBLECharacteristic *speedMeasurement = nullptr;
+static NimBLECharacteristic *cscMeasurement = nullptr;
 
 void GarminCSC::begin() {
-  Serial.println("Starting BLE Cycling Speed & Cadence test sensors");
+  Serial.println("Starting BLE Cycling Speed & Cadence Sensor");
 
-  NimBLEDevice::init("ESP32 CSC Test");
+  // Restore the original known-good cadence-only configuration.
+  NimBLEDevice::init("ESP32 Cadence");
 
   NimBLEServer *server = NimBLEDevice::createServer();
+  NimBLEService *cscService = server->createService(CSC_SERVICE_UUID);
 
-  // Diagnostic experiment: expose two separate instances of the standard
-  // Cycling Speed & Cadence service. The first is cadence-only and retains
-  // the exact 5-byte notification format that previously worked on Garmin.
-  NimBLEService *cadenceService = server->createService(CSC_SERVICE_UUID);
-  cadenceMeasurement = cadenceService->createCharacteristic(
+  cscMeasurement = cscService->createCharacteristic(
       CSC_MEASUREMENT_UUID,
       NIMBLE_PROPERTY::NOTIFY
   );
-  NimBLECharacteristic *cadenceFeature = cadenceService->createCharacteristic(
-      CSC_FEATURE_UUID,
-      NIMBLE_PROPERTY::READ
-  );
-  uint16_t cadenceFeatures = 0x0002;  // Crank Revolution Data Supported
-  cadenceFeature->setValue((uint8_t *)&cadenceFeatures, sizeof(cadenceFeatures));
-  cadenceService->start();
 
-  // The second service instance is wheel-only. This isolates Garmin's wheel
-  // parsing from the cadence implementation.
-  NimBLEService *speedService = server->createService(CSC_SERVICE_UUID);
-  speedMeasurement = speedService->createCharacteristic(
-      CSC_MEASUREMENT_UUID,
-      NIMBLE_PROPERTY::NOTIFY
-  );
-  NimBLECharacteristic *speedFeature = speedService->createCharacteristic(
+  NimBLECharacteristic *cscFeature = cscService->createCharacteristic(
       CSC_FEATURE_UUID,
       NIMBLE_PROPERTY::READ
   );
-  uint16_t speedFeatures = 0x0001;  // Wheel Revolution Data Supported
-  speedFeature->setValue((uint8_t *)&speedFeatures, sizeof(speedFeatures));
-  speedService->start();
+
+  // Crank Revolution Data Supported only.
+  uint16_t features = 0x0002;
+  cscFeature->setValue((uint8_t *)&features, sizeof(features));
+
+  cscService->start();
 
   NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
   advertising->addServiceUUID(CSC_SERVICE_UUID);
   advertising->start();
 
-  Serial.println("Advertising dual CSC test sensors: cadence-only + wheel-only");
-  _lastWheelEventMs = millis();
+  Serial.println("Advertising as ESP32 Cadence Sensor");
   _lastCrankEventMs = millis();
 }
 
 void GarminCSC::update(float speedKph, float cadenceRpm) {
+  (void)speedKph;
+
   const uint32_t now = millis();
 
-  // Wheel-only test stream.
-  if (speedKph > 0.0f && speedMeasurement != nullptr) {
-    // 700C wheel circumference is approximated as 2.105 m.
-    const float wheelRpm = speedKph * 1000.0f / 2.105f / 60.0f;
-    const uint32_t intervalMs = static_cast<uint32_t>(
-        60000.0f / wheelRpm + 0.5f);
-
-    const uint32_t elapsedMs = now - _lastWheelEventMs;
-    if (intervalMs > 0 && elapsedMs >= intervalMs) {
-      _lastWheelEventMs = now;
-      _wheelRevolutions++;
-      _wheelEventTime += static_cast<uint16_t>(
-          (elapsedMs * 1024UL) / 1000UL);
-
-      uint8_t packet[7];
-      packet[0] = 0x01;  // Wheel Revolution Data Present
-      packet[1] = _wheelRevolutions & 0xFF;
-      packet[2] = (_wheelRevolutions >> 8) & 0xFF;
-      packet[3] = (_wheelRevolutions >> 16) & 0xFF;
-      packet[4] = (_wheelRevolutions >> 24) & 0xFF;
-      packet[5] = _wheelEventTime & 0xFF;
-      packet[6] = (_wheelEventTime >> 8) & 0xFF;
-
-      speedMeasurement->setValue(packet, sizeof(packet));
-      speedMeasurement->notify();
-    }
-  } else {
-    _lastWheelEventMs = now;
-  }
-
-  // Cadence stream: preserve the known-good cadence-only implementation.
   if (cadenceRpm <= 0.0f) {
     _lastCrankEventMs = now;
     return;
@@ -101,7 +57,7 @@ void GarminCSC::update(float speedKph, float cadenceRpm) {
   }
 
   const uint32_t elapsedMs = now - _lastCrankEventMs;
-  if (elapsedMs < intervalMs || cadenceMeasurement == nullptr) {
+  if (elapsedMs < intervalMs || cscMeasurement == nullptr) {
     return;
   }
 
@@ -110,20 +66,21 @@ void GarminCSC::update(float speedKph, float cadenceRpm) {
   _crankEventTime += static_cast<uint16_t>(
       (elapsedMs * 1024UL) / 1000UL);
 
+  // Exact 5-byte cadence-only packet that was previously accepted by Garmin.
   uint8_t packet[5];
-  packet[0] = 0x02;  // Crank Revolution Data Present
+  packet[0] = 0x02;
   packet[1] = _lastCrankRevolutions & 0xFF;
   packet[2] = (_lastCrankRevolutions >> 8) & 0xFF;
   packet[3] = _crankEventTime & 0xFF;
   packet[4] = (_crankEventTime >> 8) & 0xFF;
 
-  cadenceMeasurement->setValue(packet, sizeof(packet));
-  cadenceMeasurement->notify();
+  cscMeasurement->setValue(packet, sizeof(packet));
+  cscMeasurement->notify();
 
   Serial.printf(
-      "CSC cadence: %.1f RPM, crank %u, event time %u\n",
-      cadenceRpm,
+      "Crank: %u revs, event time: %u, cadence: %.1f RPM\n",
       _lastCrankRevolutions,
-      _crankEventTime
+      _crankEventTime,
+      cadenceRpm
   );
 }
