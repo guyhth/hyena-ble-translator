@@ -10,7 +10,7 @@ public:
 private:
   uint32_t _wheelRevolutions = 0;
   uint16_t _lastCrankRevolutions = 0;
-  uint32_t _wheelEventTime = 0;
+  uint16_t _wheelEventTime = 0;
   uint16_t _crankEventTime = 0;
   uint32_t _lastWheelEventMs = 0;
   uint32_t _lastCrankEventMs = 0;
