@@ -4,18 +4,18 @@
  * ESP32-C3 firmware for translating Hyena e-bike telemetry into
  * standard Bluetooth cycling services for Garmin devices.
  *
- * Initial milestone: project skeleton. The Garmin CSC layer is
- * deliberately kept separate from the proprietary Hyena protocol
- * decoder so the latter can be developed from captured telemetry.
+ * Initial milestone: dummy Garmin sensor data. The Garmin BLE layer is
+ * deliberately kept separate from the proprietary Hyena protocol decoder
+ * so the two can be developed and tested independently.
  */
 
 #include "HyenaBike.h"
 #include "GarminCSC.h"
 #include "GarminCPS.h"
 
-// Temporary test value for validating cadence timing with Garmin.
-// Replace this with telemetry.cadenceRpm once the Hyena BLE client is
-// implemented.
+// Temporary hard-coded values for validating Garmin sensor profiles.
+// Replace these with Hyena telemetry once the BLE client is integrated.
+const float TEST_SPEED_KPH = 25.0f;
 const float TEST_CADENCE_RPM = 90.0f;
 
 HyenaBike bike;
@@ -39,9 +39,9 @@ void loop() {
 
   const BikeTelemetry &telemetry = bike.telemetry();
 
-  // Temporary simulated cadence: Garmin should report approximately
-  // 90 RPM. This will be replaced by telemetry.cadenceRpm later.
-  csc.update(telemetry.speedKph, TEST_CADENCE_RPM);
+  // Temporary simulated speed and cadence. These will be replaced by
+  // telemetry.speedKph and telemetry.cadenceRpm later.
+  csc.update(TEST_SPEED_KPH, TEST_CADENCE_RPM);
 
   if (telemetry.powerValid) {
     cps.update(telemetry.powerWatts);
