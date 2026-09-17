@@ -12,7 +12,7 @@ void GarminCSC::begin() {
   Serial.println("Starting BLE Cycling Speed & Cadence Sensor");
 
   // The NimBLE device is shared by the eventual Hyena client and Garmin
-  // peripheral. For the initial CSC POC, initialise the device here.
+  // peripheral. For the initial cadence POC, initialise the device here.
   NimBLEDevice::init("ESP32 Cadence");
 
   NimBLEServer *server = NimBLEDevice::createServer();
@@ -46,14 +46,15 @@ void GarminCSC::begin() {
 
 void GarminCSC::update(float speedKph, float cadenceRpm) {
   const uint32_t now = millis();
+  bool eventOccurred = false;
 
   // CSC wheel data uses cumulative wheel revolutions and the event time of
   // the most recent wheel revolution. A 700C wheel is approximately 2.105 m
-  // in circumference, which corresponds to ~0.130 km/h per wheel RPM.
+  // in circumference. This test uses that circumference to derive wheel RPM.
   if (speedKph > 0.0f) {
-    const float wheelRpm = speedKph / 0.130f;
-    const float intervalMsFloat = 60000.0f / wheelRpm;
-    const uint32_t intervalMs = static_cast<uint32_t>(intervalMsFloat + 0.5f);
+    const float wheelRpm = speedKph * 1000.0f / 2.105f / 60.0f;
+    const uint32_t intervalMs = static_cast<uint32_t>(
+        60000.0f / wheelRpm + 0.5f);
 
     if (intervalMs > 0) {
       const uint32_t elapsedMs = now - _lastWheelEventMs;
@@ -62,6 +63,7 @@ void GarminCSC::update(float speedKph, float cadenceRpm) {
         _wheelRevolutions++;
         _wheelEventTime += static_cast<uint16_t>(
             (elapsedMs * 1024UL) / 1000UL);
+        eventOccurred = true;
       }
     }
   } else {
@@ -87,11 +89,17 @@ void GarminCSC::update(float speedKph, float cadenceRpm) {
       _lastCrankRevolutions++;
       _crankEventTime += static_cast<uint16_t>(
           (elapsedMs * 1024UL) / 1000UL);
+      eventOccurred = true;
     }
   }
 
-  // Notify on every update so the Garmin receives the latest cumulative
-  // counters. It can calculate speed/cadence from successive events.
+  // CSC is event-driven: notify only when a wheel or crank revolution has
+  // occurred. The Garmin calculates speed and cadence from successive
+  // cumulative revolution counters and event timestamps.
+  if (!eventOccurred || cscMeasurement == nullptr) {
+    return;
+  }
+
   uint8_t packet[11];
   uint8_t flags = 0;
 
@@ -123,20 +131,14 @@ void GarminCSC::update(float speedKph, float cadenceRpm) {
   packet[9] = _crankEventTime & 0xFF;
   packet[10] = (_crankEventTime >> 8) & 0xFF;
 
-  if (cscMeasurement != nullptr) {
-    cscMeasurement->setValue(packet, sizeof(packet));
-    cscMeasurement->notify();
-  }
+  cscMeasurement->setValue(packet, sizeof(packet));
+  cscMeasurement->notify();
 
-  static uint32_t lastLogMs = 0;
-  if (now - lastLogMs >= 1000) {
-    lastLogMs = now;
-    Serial.printf(
-        "CSC: speed %.1f km/h, cadence %.1f RPM, wheel %lu, crank %u\n",
-        speedKph,
-        cadenceRpm,
-        static_cast<unsigned long>(_wheelRevolutions),
-        _lastCrankRevolutions
-    );
-  }
+  Serial.printf(
+      "CSC event: speed %.1f km/h, cadence %.1f RPM, wheel %lu, crank %u\n",
+      speedKph,
+      cadenceRpm,
+      static_cast<unsigned long>(_wheelRevolutions),
+      _lastCrankRevolutions
+  );
 }
