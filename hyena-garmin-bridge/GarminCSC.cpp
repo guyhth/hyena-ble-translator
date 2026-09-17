@@ -43,38 +43,25 @@ void GarminCSC::begin() {
 }
 
 void GarminCSC::update(float speedKph, float cadenceRpm) {
+  (void)speedKph;
   (void)cadenceRpm;
 
   const uint32_t now = millis();
 
-  if (speedKph <= 0.0f || cscMeasurement == nullptr) {
-    _lastWheelEventMs = now;
-    return;
-  }
-
-  // Approximate 700C wheel circumference: 2.105 m.
-  // This is only used to generate correctly timed wheel revolution events;
-  // Garmin derives speed from the revolution count and event timestamp.
-  const float wheelRpm = speedKph * 1000.0f / 2.105f / 60.0f;
-  if (wheelRpm <= 0.0f) {
-    _lastWheelEventMs = now;
-    return;
-  }
-
-  uint32_t intervalMs = static_cast<uint32_t>(60000.0f / wheelRpm + 0.5f);
-  if (intervalMs == 0) {
-    intervalMs = 1;
-  }
-
+  // Deliberately ignore the live input and generate exactly one wheel
+  // revolution per second. With a 2.105 m circumference Garmin should
+  // calculate approximately 7.58 km/h from the revolution count/timestamp.
   const uint32_t elapsedMs = now - _lastWheelEventMs;
-  if (elapsedMs < intervalMs) {
+  if (elapsedMs < 1000 || cscMeasurement == nullptr) {
     return;
   }
 
-  _lastWheelEventMs = now;
+  // Keep the test timing deterministic rather than accumulating millis()
+  // jitter. Each notification represents exactly one second since the
+  // previous wheel event.
+  _lastWheelEventMs += 1000;
   _wheelRevolutions++;
-  _wheelEventTime += static_cast<uint16_t>(
-      (elapsedMs * 1024UL) / 1000UL);
+  _wheelEventTime += 1024;
 
   // Wheel-only CSC Measurement packet:
   // flags (1) + cumulative wheel revolutions (4) + last wheel event time (2).
@@ -91,9 +78,8 @@ void GarminCSC::update(float speedKph, float cadenceRpm) {
   cscMeasurement->notify();
 
   Serial.printf(
-      "Wheel: %lu revs, event time: %u, speed: %.1f km/h\n",
+      "Wheel: %lu revs, event time: %u, test speed: 7.58 km/h\n",
       static_cast<unsigned long>(_wheelRevolutions),
-      _wheelEventTime,
-      speedKph
+      _wheelEventTime
   );
 }
