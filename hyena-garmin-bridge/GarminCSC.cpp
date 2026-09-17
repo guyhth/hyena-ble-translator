@@ -5,6 +5,7 @@
 #define CSC_SERVICE_UUID       "1816"
 #define CSC_MEASUREMENT_UUID   "2A5B"
 #define CSC_FEATURE_UUID       "2A5C"
+#define CSC_CONTROL_POINT_UUID "2A55"
 
 static NimBLECharacteristic *cscMeasurement = nullptr;
 
@@ -31,6 +32,16 @@ void GarminCSC::begin() {
   // Wheel Revolution Data Supported only.
   uint16_t features = 0x0001;
   cscFeature->setValue((uint8_t *)&features, sizeof(features));
+
+  // The CSC specification requires the SC Control Point when wheel
+  // revolution data is supported. Garmin may discover/connect to a CSC
+  // sensor without it, but may not activate it for an activity. For this
+  // diagnostic branch we expose the characteristic with the required
+  // Write + Indicate properties. No procedures are needed for the test.
+  cscService->createCharacteristic(
+      CSC_CONTROL_POINT_UUID,
+      NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::INDICATE
+  );
 
   cscService->start();
 
