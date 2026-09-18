@@ -8,56 +8,80 @@ constexpr char HYENA_SERVICE_UUID[] =
     "48592800-6879-656E-6174-656B2E485550";
 constexpr char HYENA_DEVICE_PREFIX[] = "DITK";
 
-String dataToHex(const std::string &data) {
-  String result;
-  result.reserve(data.length() * 3);
+NimBLEClient *hyenaClient = nullptr;
 
-  for (size_t i = 0; i < data.length(); ++i) {
-    if (i > 0) {
-      result += ' ';
-    }
-    char byteText[3];
-    snprintf(byteText, sizeof(byteText), "%02X",
-             static_cast<uint8_t>(data[i]));
-    result += byteText;
+class ClientCallbacks : public NimBLEClientCallbacks {
+public:
+  void onConnect(NimBLEClient *client) override {
+    Serial.printf("Hyena GATT connected: %s\n",
+                  client->getPeerAddress().toString().c_str());
   }
 
-  return result;
-}
-
-void printDevice(const NimBLEAdvertisedDevice *device) {
-  const std::string name = device->getName();
-  const bool looksLikeHyena =
-      name.rfind(HYENA_DEVICE_PREFIX, 0) == 0 ||
-      (device->haveServiceUUID() &&
-       device->getServiceUUID().toString() == HYENA_SERVICE_UUID);
-
-  Serial.println("----------------------------------------");
-  Serial.printf("Name: %s%s\n", name.c_str(),
-                looksLikeHyena ? "  <-- Hyena candidate" : "");
-  Serial.printf("Address: %s\n", device->getAddress().toString().c_str());
-  Serial.printf("RSSI: %d dBm\n", device->getRSSI());
-
-  if (device->haveServiceUUID()) {
-    Serial.printf("Service UUID: %s\n",
-                  device->getServiceUUID().toString().c_str());
+  void onDisconnect(NimBLEClient *client, int reason) override {
+    Serial.printf("Hyena GATT disconnected, reason: %d\n", reason);
   }
-
-  if (device->haveManufacturerData()) {
-    Serial.printf("Manufacturer data: %s\n",
-                  dataToHex(device->getManufacturerData()).c_str());
-  }
-
-  if (device->haveServiceData()) {
-    Serial.printf("Service data: %s\n",
-                  dataToHex(device->getServiceData()).c_str());
-  }
-}
+};
 
 class ScanCallbacks : public NimBLEScanCallbacks {
 public:
   void onResult(const NimBLEAdvertisedDevice *device) override {
-    printDevice(device);
+    const std::string name = device->getName();
+
+    if (name.rfind(HYENA_DEVICE_PREFIX, 0) != 0) {
+      return;
+    }
+
+    Serial.println("----------------------------------------");
+    Serial.printf("Hyena device found: %s\n", name.c_str());
+    Serial.printf("Address: %s\n", device->getAddress().toString().c_str());
+    Serial.printf("RSSI: %d dBm\n", device->getRSSI());
+
+    NimBLEDevice::getScan()->stop();
+
+    if (hyenaClient != nullptr) {
+      NimBLEDevice::deleteClient(hyenaClient);
+    }
+
+    hyenaClient = NimBLEDevice::createClient();
+    hyenaClient->setClientCallbacks(new ClientCallbacks(), false);
+    hyenaClient->setConnectionParams(12, 12, 0, 150);
+    hyenaClient->setConnectTimeout(5 * 1000);
+
+    Serial.println("Connecting to Hyena...");
+
+    if (!hyenaClient->connect(device)) {
+      Serial.printf("Hyena GATT connection failed: %s\n",
+                    NimBLEUtils::returnCodeToString(
+                        hyenaClient->getLastError()).c_str());
+      NimBLEDevice::deleteClient(hyenaClient);
+      hyenaClient = nullptr;
+      return;
+    }
+
+    auto *services = hyenaClient->getServices(true);
+    Serial.printf("Services discovered: %d\n",
+                  static_cast<int>(services.size()));
+
+    for (auto *service : services) {
+      Serial.printf("Service: %s\n",
+                    service->getUUID().toString().c_str());
+
+      for (auto *characteristic : service->getCharacteristics(true)) {
+        Serial.printf("  Characteristic: %s",
+                      characteristic->getUUID().toString().c_str());
+
+        std::string properties;
+        if (characteristic->canRead()) properties += " READ";
+        if (characteristic->canWrite()) properties += " WRITE";
+        if (characteristic->canWriteNoResponse()) properties += " WRITE_NR";
+        if (characteristic->canNotify()) properties += " NOTIFY";
+        if (characteristic->canIndicate()) properties += " INDICATE";
+
+        Serial.printf(" [%s]\n", properties.c_str());
+      }
+    }
+
+    Serial.println("GATT discovery complete");
   }
 };
 
@@ -82,5 +106,5 @@ void HyenaBike::begin() {
 }
 
 void HyenaBike::loop() {
-  // No connection or notification handling in this test.
+  // Connection and GATT discovery are performed once from the scan callback.
 }
