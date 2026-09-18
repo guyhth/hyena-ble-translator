@@ -47,8 +47,7 @@ void GarminCSC::begin() {
   advertising->start();
 
   Serial.println("Advertising as ESP32 Speed/Cadence Sensor");
-  _lastWheelEventMs = millis();
-  _lastCrankEventMs = millis();
+  _lastUpdateMs = millis();
 }
 
 void GarminCSC::update(float speedKph, float cadenceRpm) {
