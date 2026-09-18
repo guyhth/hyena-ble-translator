@@ -45,7 +45,7 @@ The CSC service will provide:
 - **Speed** — derived from cumulative wheel revolutions and wheel event time.
 - **Cadence** — derived from cumulative crank revolutions and crank event time.
 
-The current development test uses **25 km/h speed** and **90 RPM cadence**. Cadence transmission has already been successfully demonstrated with the Garmin; the current work is adding and validating speed alongside it.
+The Garmin-facing CSC service now consumes live Hyena speed and cadence telemetry. The Hyena decoder uses `0x0201` bytes 0–1 for speed (0.01 km/h) and `0x0203` bytes 0–1 for cadence (raw / 40 = RPM).
 
 ### Cycling Power Service (CPS)
 
@@ -96,8 +96,8 @@ docs/
 - [ ] Validate CSC speed with hard-coded value
 - [ ] Validate CPS rider power with hard-coded value
 - [ ] Validate standard Bluetooth Battery Service / SoC with Garmin
-- [ ] Integrate Hyena BLE connection and telemetry notifications
-- [ ] Replace hard-coded CSC values with Hyena speed and cadence telemetry
+- [x] Integrate Hyena BLE connection and telemetry notifications
+- [x] Replace hard-coded CSC values with Hyena speed and cadence telemetry
 - [ ] Replace hard-coded CPS value with Hyena rider power telemetry
 - [ ] Replace hard-coded battery value with Hyena battery SoC
 - [ ] Investigate Shimano STEPS emulation only if required for Garmin battery/e-bike functionality
