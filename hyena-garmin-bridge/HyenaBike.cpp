@@ -52,13 +52,13 @@ public:
     if (!hyenaClient->connect(device)) {
       Serial.printf("Hyena GATT connection failed: %s\n",
                     NimBLEUtils::returnCodeToString(
-                        hyenaClient->getLastError()).c_str());
+                        hyenaClient->getLastError()));
       NimBLEDevice::deleteClient(hyenaClient);
       hyenaClient = nullptr;
       return;
     }
 
-    auto *services = hyenaClient->getServices(true);
+    const auto services = hyenaClient->getServices(true);
     Serial.printf("Services discovered: %d\n",
                   static_cast<int>(services.size()));
 
