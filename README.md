@@ -93,7 +93,7 @@ docs/
 - [x] ESP32-C3 Arduino project skeleton
 - [x] Garmin CSC cadence proof of concept — Garmin successfully reports cadence
 - [x] Hyena cadence decoding identified (`0203`, raw value / 40 = RPM)
-- [ ] Validate CSC speed with hard-coded value
+- [x] Validate CSC speed with hard-coded value
 - [ ] Validate CPS rider power with hard-coded value
 - [ ] Validate standard Bluetooth Battery Service / SoC with Garmin
 - [x] Integrate Hyena BLE connection and telemetry notifications
