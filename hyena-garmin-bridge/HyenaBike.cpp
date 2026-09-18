@@ -6,12 +6,40 @@ namespace {
 
 constexpr char HYENA_SERVICE_UUID[] =
     "48592800-6879-656E-6174-656B2E485550";
+constexpr char HYENA_TELEMETRY_UUID[] =
+    "4859FF01-6879-656E-6174-656B2E485550";
 constexpr char HYENA_DEVICE_PREFIX[] = "DITK";
 
 NimBLEClient *hyenaClient = nullptr;
 NimBLEAddress hyenaAddress;
+NimBLERemoteCharacteristic *telemetryCharacteristic = nullptr;
 bool hyenaFound = false;
 bool connectionAttempted = false;
+
+String dataToHex(const uint8_t *data, size_t length) {
+  String result;
+  result.reserve(length * 3);
+
+  for (size_t i = 0; i < length; ++i) {
+    if (i > 0) {
+      result += ' ';
+    }
+
+    char byteText[3];
+    snprintf(byteText, sizeof(byteText), "%02X", data[i]);
+    result += byteText;
+  }
+
+  return result;
+}
+
+void telemetryNotification(NimBLERemoteCharacteristic *characteristic,
+                           uint8_t *data, size_t length, bool isNotify) {
+  Serial.printf("Hyena notification [%s] %u bytes: %s\n",
+                isNotify ? "NOTIFY" : "INDICATE",
+                static_cast<unsigned>(length),
+                dataToHex(data, length).c_str());
+}
 
 class ClientCallbacks : public NimBLEClientCallbacks {
 public:
@@ -24,6 +52,37 @@ public:
     Serial.printf("Hyena GATT disconnected, reason: %d\n", reason);
   }
 };
+
+bool subscribeToTelemetry() {
+  NimBLERemoteService *service = hyenaClient->getService(HYENA_SERVICE_UUID);
+  if (service == nullptr) {
+    Serial.printf("Hyena service not found: %s\n", HYENA_SERVICE_UUID);
+    return false;
+  }
+
+  telemetryCharacteristic = service->getCharacteristic(HYENA_TELEMETRY_UUID);
+  if (telemetryCharacteristic == nullptr) {
+    Serial.printf("Hyena telemetry characteristic not found: %s\n",
+                  HYENA_TELEMETRY_UUID);
+    return false;
+  }
+
+  if (!telemetryCharacteristic->canNotify()) {
+    Serial.println("Hyena telemetry characteristic does not support NOTIFY");
+    return false;
+  }
+
+  Serial.printf("Subscribing to Hyena telemetry: %s\n",
+                HYENA_TELEMETRY_UUID);
+
+  if (!telemetryCharacteristic->subscribe(true, telemetryNotification)) {
+    Serial.println("Hyena telemetry subscription failed");
+    return false;
+  }
+
+  Serial.println("Hyena telemetry subscription active");
+  return true;
+}
 
 void discoverServices() {
   const auto services = hyenaClient->getServices(true);
@@ -94,7 +153,8 @@ void HyenaBike::begin() {
 }
 
 void HyenaBike::loop() {
-  if (!hyenaFound || connectionAttempted || NimBLEDevice::getScan()->isScanning()) {
+  if (!hyenaFound || connectionAttempted ||
+      NimBLEDevice::getScan()->isScanning()) {
     return;
   }
 
@@ -121,4 +181,5 @@ void HyenaBike::loop() {
   }
 
   discoverServices();
+  subscribeToTelemetry();
 }
