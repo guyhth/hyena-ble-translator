@@ -16,6 +16,7 @@ class HyenaBike {
 public:
   void begin();
   void loop();
+  void handleNotification(const uint8_t *data, size_t length);
   const BikeTelemetry &telemetry() const { return _telemetry; }
 
 private:
