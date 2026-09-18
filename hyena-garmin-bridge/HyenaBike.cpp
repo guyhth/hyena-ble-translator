@@ -35,10 +35,43 @@ String dataToHex(const uint8_t *data, size_t length) {
 
 void telemetryNotification(NimBLERemoteCharacteristic *characteristic,
                            uint8_t *data, size_t length, bool isNotify) {
-  Serial.printf("Hyena notification [%s] %u bytes: %s\n",
-                isNotify ? "NOTIFY" : "INDICATE",
-                static_cast<unsigned>(length),
-                dataToHex(data, length).c_str());
+  (void)characteristic;
+  (void)isNotify;
+
+  if (length < 5 || data[0] != 0x00 || data[1] != 0x00) {
+    return;
+  }
+
+  const uint16_t packetId =
+      (static_cast<uint16_t>(data[2]) << 8) | data[3];
+  const uint8_t payloadLength = data[4];
+
+  if (length < 5 + payloadLength) {
+    return;
+  }
+
+  const uint8_t *payload = data + 5;
+
+  if (packetId == 0x0201 && payloadLength >= 2) {
+    const uint16_t rawSpeed =
+        static_cast<uint16_t>(payload[0]) |
+        (static_cast<uint16_t>(payload[1]) << 8);
+
+    // 0x0201 bytes 0-1 are bike speed in 0.01 km/h.
+    const float speedKph = rawSpeed / 100.0f;
+    Serial.printf("Hyena speed: %.2f km/h\\n", speedKph);
+    return;
+  }
+
+  if (packetId == 0x0203 && payloadLength >= 2) {
+    const uint16_t rawCadence =
+        static_cast<uint16_t>(payload[0]) |
+        (static_cast<uint16_t>(payload[1]) << 8);
+
+    // 0x0203 bytes 0-1 are cadence, with raw / 40 = RPM.
+    const float cadenceRpm = rawCadence / 40.0f;
+    Serial.printf("Hyena cadence: %.1f RPM\\n", cadenceRpm);
+  }
 }
 
 class ClientCallbacks : public NimBLEClientCallbacks {
