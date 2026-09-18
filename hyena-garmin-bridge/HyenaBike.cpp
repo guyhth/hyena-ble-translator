@@ -4,9 +4,20 @@
 
 namespace {
 
+constexpr char HYENA_SERVICE_UUID[] =
+    "48592800-6879-656E-6174-656B2E485550";
+constexpr char HYENA_DEVICE_PREFIX[] = "DITK";
+
 void printDevice(const NimBLEAdvertisedDevice *device) {
+  const std::string name = device->getName();
+  const bool looksLikeHyena =
+      name.rfind(HYENA_DEVICE_PREFIX, 0) == 0 ||
+      (device->haveServiceUUID() &&
+       device->getServiceUUID().toString() == HYENA_SERVICE_UUID);
+
   Serial.println("----------------------------------------");
-  Serial.printf("Name: %s\n", device->getName().c_str());
+  Serial.printf("Name: %s%s\n", name.c_str(),
+                looksLikeHyena ? "  <-- Hyena candidate" : "");
   Serial.printf("Address: %s\n", device->getAddress().toString().c_str());
   Serial.printf("RSSI: %d dBm\n", device->getRSSI());
 
@@ -39,6 +50,7 @@ public:
 
 void HyenaBike::begin() {
   Serial.println("Starting Hyena BLE scan");
+  Serial.printf("Looking for DITK devices / service %s\n", HYENA_SERVICE_UUID);
 
   NimBLEDevice::init("");
 
