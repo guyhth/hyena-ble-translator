@@ -13,11 +13,6 @@
 #include "GarminCSC.h"
 #include "GarminCPS.h"
 
-// Temporary hard-coded values for validating Garmin sensor profiles.
-// Replace these with Hyena telemetry once the BLE client is integrated.
-const float TEST_SPEED_KPH = 25.0f;
-const float TEST_CADENCE_RPM = 90.0f;
-
 HyenaBike bike;
 GarminCSC csc;
 GarminCPS cps;
@@ -39,9 +34,11 @@ void loop() {
 
   const BikeTelemetry &telemetry = bike.telemetry();
 
-  // Temporary simulated speed and cadence. These will be replaced by
-  // telemetry.speedKph and telemetry.cadenceRpm later.
-  csc.update(TEST_SPEED_KPH, TEST_CADENCE_RPM);
+  // Feed the latest live Hyena telemetry into the Garmin-facing CSC service.
+  csc.update(
+      telemetry.speedValid ? telemetry.speedKph : 0.0f,
+      telemetry.cadenceValid ? telemetry.cadenceRpm : 0.0f
+  );
 
   if (telemetry.powerValid) {
     cps.update(telemetry.powerWatts);
