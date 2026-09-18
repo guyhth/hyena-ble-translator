@@ -8,6 +8,23 @@ constexpr char HYENA_SERVICE_UUID[] =
     "48592800-6879-656E-6174-656B2E485550";
 constexpr char HYENA_DEVICE_PREFIX[] = "DITK";
 
+String dataToHex(const std::string &data) {
+  String result;
+  result.reserve(data.length() * 3);
+
+  for (size_t i = 0; i < data.length(); ++i) {
+    if (i > 0) {
+      result += ' ';
+    }
+    char byteText[3];
+    snprintf(byteText, sizeof(byteText), "%02X",
+             static_cast<uint8_t>(data[i]));
+    result += byteText;
+  }
+
+  return result;
+}
+
 void printDevice(const NimBLEAdvertisedDevice *device) {
   const std::string name = device->getName();
   const bool looksLikeHyena =
@@ -28,14 +45,12 @@ void printDevice(const NimBLEAdvertisedDevice *device) {
 
   if (device->haveManufacturerData()) {
     Serial.printf("Manufacturer data: %s\n",
-                  NimBLEUtils::dataToHexString(
-                      device->getManufacturerData()).c_str());
+                  dataToHex(device->getManufacturerData()).c_str());
   }
 
   if (device->haveServiceData()) {
     Serial.printf("Service data: %s\n",
-                  NimBLEUtils::dataToHexString(
-                      device->getServiceData()).c_str());
+                  dataToHex(device->getServiceData()).c_str());
   }
 }
 
